@@ -8,6 +8,56 @@
 
 using namespace std;
 
+/* Table of CRCs of all 8-bit messages. */
+unsigned long crc_table[256];
+
+/* Flag: has the table been computed? Initially false. */
+int crc_table_computed = 0;
+
+/* Make the table for a fast CRC. */
+void make_crc_table(void)
+{
+    unsigned long c;
+    int n, k;
+
+    for (n = 0; n < 256; n++) {
+        c = (unsigned long) n;
+        for (k = 0; k < 8; k++) {
+            if (c & 1)
+                c = 0xedb88320L ^ (c >> 1);
+            else
+                c = c >> 1;
+        }
+        crc_table[n] = c;
+    }
+    crc_table_computed = 1;
+}
+
+/* Update a running CRC with the bytes buf[0..len-1]--the CRC
+   should be initialized to all 1's, and the transmitted value
+   is the 1's complement of the final running CRC (see the
+   crc() routine below)). */
+
+unsigned long update_crc(unsigned long crc, unsigned char *buf, int len)
+{
+    unsigned long c = crc;
+    int n;
+
+    if (!crc_table_computed)
+        make_crc_table();
+    for (n = 0; n < len; n++) {
+        c = crc_table[(c ^ buf[n]) & 0xff] ^ (c >> 8);
+    }
+    return c;
+}
+
+/* Return the CRC of the bytes buf[0..len-1]. */
+unsigned long crc(unsigned char *buf, int len)
+{
+    return update_crc(0xffffffffL, buf, len) ^ 0xffffffffL;
+}
+
+
 #define PNG_SIG_CAP 8
 const uint8_t png_sig[PNG_SIG_CAP] = {137, 80, 78, 71, 13, 10, 26, 10};
 
@@ -61,6 +111,8 @@ uint8_t chunk_buf[CHUNK_BUF_CAP];
 
 int main(int argc, char const *argv[])
 {
+    make_crc_table();
+
     string program = *argv++;
     
     // Gets input file name
@@ -135,6 +187,24 @@ int main(int argc, char const *argv[])
         uint32_t chunk_crc;
         read_bytes(input_file, &chunk_crc, sizeof(chunk_crc));
         write_bytes(output_file, &chunk_crc, sizeof(chunk_crc));
+
+        // Injects the message
+        if (*(uint32_t*)chunk_type == 1380206665) {
+            // TODO: Make a custom data injection
+            uint32_t injected_sz = 13;
+            reverse_bytes(&injected_sz, sizeof(injected_sz));
+            write_bytes(output_file, &injected_sz, sizeof(injected_sz));
+            reverse_bytes(&injected_sz, sizeof(injected_sz));
+
+            const string injected_type = "ntHG";
+            write_bytes(output_file, injected_type.c_str(), 4);
+
+            write_bytes(output_file, "Hello World\n", injected_sz);
+
+            // TODO: This is wrong. Fixe it.
+            uint32_t injected_crc = crc((unsigned char *)"Hello World\n", injected_sz);
+            write_bytes(output_file, &injected_crc, sizeof(injected_crc));
+        }
 
         cout << "[Info]: Chunk Size: " << chunk_sz << "\n";
         cout << "[Info]: Chunk Type: " << chunk_type[0] << chunk_type[1] << chunk_type[2] << chunk_type[3] << " (" << *(uint32_t*)chunk_type << ")\n";
