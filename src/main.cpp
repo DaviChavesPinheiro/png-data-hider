@@ -82,7 +82,20 @@ int main(int argc, char const *argv[])
     read_bytes(file, chunk_type, sizeof(chunk_type));
     cout << "[Info]: Chunk Type: " << chunk_type[0] << chunk_type[1] << chunk_type[2] << chunk_type[3] << "\n";
 
+    // Jumps the chunk data
+    file.seekg(chunk_sz, std::ios_base::cur);
+    if(!file.good()) {
+        cerr << "[Error]: Jumping chunk failed.\n";
+    }
 
+    // Reads the chunk crc
+    uint32_t chunk_crc;
+    read_bytes(file, &chunk_crc, sizeof(chunk_crc));
+    cout << "[Info]: Chunk CRC: " << chunk_crc << "\n";
+
+
+
+    
     file.close();
     return 0;
 }
