@@ -14,14 +14,22 @@ const uint8_t png_sig[PNG_SIG_CAP] = {137, 80, 78, 71, 13, 10, 26, 10};
 void read_bytes(ifstream &istream, void *buffer, size_t buffer_size) {
     if(!istream.read((char*) buffer, buffer_size)) {
         if(istream.eof()) {
-            cerr << "[Error]: Cannot read " << buffer_size << " bytes from the image.\n";
+            cerr << "[Error]: Cannot read " << buffer_size << " bytes from the ifstream.\n";
         } else if(istream.fail())
         {
-            cerr << "[Error]: Something went wrong when opening the image.\n";
+            cerr << "[Error]: Something went wrong when reading the ifstream.\n";
         } else
         {
             assert(0 && "unreachable");
         }
+        exit(1);
+    }
+}
+
+void write_bytes(ostream &ostream, const void *buffer, size_t buffer_size) {
+    ostream.write((const char *)buffer, buffer_size);
+    if(!ostream.good()) {
+        cerr << "[Error]: Something went wrong when writing the ofstream.\n";
         exit(1);
     }
 }
@@ -44,28 +52,47 @@ void reverse_bytes(void *buffer, size_t buffer_size) {
     }
 }
 
+void print_usage(const string &program) {
+    cerr << "Usage:" << program << " <input.png> <output.png>\n";
+}
+
 int main(int argc, char const *argv[])
 {
     string program = *argv++;
     
+    // Gets input file name
     if (*argv == NULL) {
-        cerr << "Usage:" << program << " <input.png>\n";
+        print_usage(program);
+        cerr << "[Error]: No input file is provided. \n";
         exit(1);
     }
-    
     string input_filepath = *argv++;
-    cout << "[Info]: Inspected file is " << input_filepath << ".\n";
 
-    // Openning the file
-    ifstream file (input_filepath, ios::in | ios::binary);
-    if (!file.is_open()) {
+    // Gets output file name
+    if (*argv == NULL) {
+        print_usage(program);
+        cerr << "[Error]: No output file is provided. \n";
+        exit(1);
+    }
+    string output_filepath = *argv++;
+
+    // Openning the input file
+    ifstream input_file (input_filepath, ios::in | ios::binary);
+    if (!input_file.is_open()) {
         cerr << "[Error]: Unable to open file " << input_filepath <<": " << strerror(errno) << ".\n";
+        exit(1);
+    }
+
+    // Openning the output file
+    ofstream output_file (output_filepath, ios::out | ios::binary);
+    if (!output_file.is_open()) {
+        cerr << "[Error]: Unable to open file " << output_filepath <<": " << strerror(errno) << ".\n";
         exit(1);
     }
 
     // Reads the signature of PNG image
     uint8_t sig[PNG_SIG_CAP];
-    read_bytes(file, sig, PNG_SIG_CAP);
+    read_bytes(input_file, sig, PNG_SIG_CAP);
     if(memcmp(sig, png_sig, PNG_SIG_CAP) != 0) {
         cerr << "[Error]: " << input_filepath << " is not a PNG image.\n";
         exit(1);
@@ -76,25 +103,25 @@ int main(int argc, char const *argv[])
     {
         // Reads the chunk size
         uint32_t chunk_sz;
-        read_bytes(file, &chunk_sz, sizeof(chunk_sz));
+        read_bytes(input_file, &chunk_sz, sizeof(chunk_sz));
         reverse_bytes(&chunk_sz, sizeof(chunk_sz));
 
         // Reads the chunk type
         uint8_t chunk_type[4];
-        read_bytes(file, chunk_type, sizeof(chunk_type));
+        read_bytes(input_file, chunk_type, sizeof(chunk_type));
 
         // If type is IEND
         if(*(uint32_t*)chunk_type == 1145980233) quit = true;
 
         // Jumps the chunk data
-        file.seekg(chunk_sz, std::ios_base::cur);
-        if(!file.good()) {
+        input_file.seekg(chunk_sz, std::ios_base::cur);
+        if(!input_file.good()) {
             cerr << "[Error]: Jumping chunk failed.\n";
         }
 
         // Reads the chunk crc
         uint32_t chunk_crc;
-        read_bytes(file, &chunk_crc, sizeof(chunk_crc));
+        read_bytes(input_file, &chunk_crc, sizeof(chunk_crc));
 
         cout << "[Info]: Chunk Size: " << chunk_sz << "\n";
         cout << "[Info]: Chunk Type: " << chunk_type[0] << chunk_type[1] << chunk_type[2] << chunk_type[3] << " (" << *(uint32_t*)chunk_type << ")\n";
@@ -102,6 +129,7 @@ int main(int argc, char const *argv[])
         cout << "--------------------------------------\n";
     }
 
-    file.close();
+    input_file.close();
+    output_file.close();
     return 0;
 }
