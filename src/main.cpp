@@ -8,6 +8,30 @@
 
 using namespace std;
 
+#define PNG_SIG_CAP 8
+const uint8_t png_sig[PNG_SIG_CAP] = {137, 80, 78, 71, 13, 10, 26, 10};
+
+void read_buffer(ifstream &istream, uint8_t *buffer, size_t buffer_size) {
+    if(!istream.read((char*) buffer, buffer_size)) {
+        if(istream.eof()) {
+            cerr << "[Error]: The image is tool small.\n";
+        } else if(istream.fail())
+        {
+            cerr << "[Error]: Something went wrong when opening the image.\n";
+        } else
+        {
+            assert(0 && "unreachable");
+        }
+        exit(1);
+    }
+}
+
+void print_bytes(uint8_t *buffer, size_t buffer_size) {
+    for (size_t i = 0; i <buffer_size; i++)
+        cout << (int)buffer[i] << " ";
+    cout << "\n";
+}
+
 int main(int argc, char const *argv[])
 {
     string program = *argv++;
@@ -27,25 +51,15 @@ int main(int argc, char const *argv[])
         exit(1);
     }
 
-    uint8_t sig[8];
-    if(!file.read((char*) sig, sizeof(sig))) {
-        if(file.eof()) {
-            cout << "[Error]: The image is tool small.\n";
-        } else if(file.fail())
-        {
-            cout << "[Error]: Something went wrong when opening the image.\n";
-        } else
-        {
-            assert(0 && "unreachable");
-        }
+    // Reads the signature of PNG image
+    uint8_t sig[PNG_SIG_CAP];
+    read_buffer(file, sig, PNG_SIG_CAP);
+    print_bytes(sig, PNG_SIG_CAP);
+    if(memcmp(sig, png_sig, PNG_SIG_CAP) != 0) {
+        cerr << "[Error]: " << input_filepath << " is not a PNG image.\n";
         exit(1);
     }
-    
-    for (size_t i = 0; i < sizeof(sig); i++)
-    {
-        cout << (int)sig[i] << " ";
-    }
-    
-    
+
+    file.close();
     return 0;
 }
