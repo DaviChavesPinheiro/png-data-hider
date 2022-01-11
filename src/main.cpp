@@ -56,6 +56,9 @@ void print_usage(const string &program) {
     cerr << "Usage:" << program << " <input.png> <output.png>\n";
 }
 
+#define CHUNK_BUF_CAP (32 * 1024)
+uint8_t chunk_buf[CHUNK_BUF_CAP];
+
 int main(int argc, char const *argv[])
 {
     string program = *argv++;
@@ -93,6 +96,7 @@ int main(int argc, char const *argv[])
     // Reads the signature of PNG image
     uint8_t sig[PNG_SIG_CAP];
     read_bytes(input_file, sig, PNG_SIG_CAP);
+    write_bytes(output_file, sig, PNG_SIG_CAP);
     if(memcmp(sig, png_sig, PNG_SIG_CAP) != 0) {
         cerr << "[Error]: " << input_filepath << " is not a PNG image.\n";
         exit(1);
@@ -104,24 +108,33 @@ int main(int argc, char const *argv[])
         // Reads the chunk size
         uint32_t chunk_sz;
         read_bytes(input_file, &chunk_sz, sizeof(chunk_sz));
+        write_bytes(output_file, &chunk_sz, sizeof(chunk_sz));
         reverse_bytes(&chunk_sz, sizeof(chunk_sz));
 
         // Reads the chunk type
         uint8_t chunk_type[4];
         read_bytes(input_file, chunk_type, sizeof(chunk_type));
+        write_bytes(output_file, chunk_type, sizeof(chunk_type));
 
         // If type is IEND
         if(*(uint32_t*)chunk_type == 1145980233) quit = true;
 
-        // Jumps the chunk data
-        input_file.seekg(chunk_sz, std::ios_base::cur);
-        if(!input_file.good()) {
-            cerr << "[Error]: Jumping chunk failed.\n";
+        // Reads and copies the chunk data
+        size_t n = chunk_sz;
+        while (n > 0) {
+            size_t m = n;
+            if (m > CHUNK_BUF_CAP) {
+                m = CHUNK_BUF_CAP;
+            }
+            read_bytes(input_file, chunk_buf, m);
+            write_bytes(output_file, chunk_buf, m);
+            n -= m;
         }
 
         // Reads the chunk crc
         uint32_t chunk_crc;
         read_bytes(input_file, &chunk_crc, sizeof(chunk_crc));
+        write_bytes(output_file, &chunk_crc, sizeof(chunk_crc));
 
         cout << "[Info]: Chunk Size: " << chunk_sz << "\n";
         cout << "[Info]: Chunk Type: " << chunk_type[0] << chunk_type[1] << chunk_type[2] << chunk_type[3] << " (" << *(uint32_t*)chunk_type << ")\n";
