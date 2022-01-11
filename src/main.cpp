@@ -14,7 +14,7 @@ const uint8_t png_sig[PNG_SIG_CAP] = {137, 80, 78, 71, 13, 10, 26, 10};
 void read_bytes(ifstream &istream, void *buffer, size_t buffer_size) {
     if(!istream.read((char*) buffer, buffer_size)) {
         if(istream.eof()) {
-            cerr << "[Error]: The image is tool small.\n";
+            cerr << "[Error]: Cannot read " << buffer_size << " bytes from the image.\n";
         } else if(istream.fail())
         {
             cerr << "[Error]: Something went wrong when opening the image.\n";
@@ -71,31 +71,37 @@ int main(int argc, char const *argv[])
         exit(1);
     }
 
-    // Reads the chunk size
-    uint32_t chunk_sz;
-    read_bytes(file, &chunk_sz, sizeof(chunk_sz));
-    reverse_bytes(&chunk_sz, sizeof(chunk_sz));
-    cout << "[Info]: Chunk Size: " << chunk_sz << "\n";
+    bool quit = false;
+    while (!quit)
+    {
+        // Reads the chunk size
+        uint32_t chunk_sz;
+        read_bytes(file, &chunk_sz, sizeof(chunk_sz));
+        reverse_bytes(&chunk_sz, sizeof(chunk_sz));
 
-    // Reads the chunk type
-    uint8_t chunk_type[4];
-    read_bytes(file, chunk_type, sizeof(chunk_type));
-    cout << "[Info]: Chunk Type: " << chunk_type[0] << chunk_type[1] << chunk_type[2] << chunk_type[3] << "\n";
+        // Reads the chunk type
+        uint8_t chunk_type[4];
+        read_bytes(file, chunk_type, sizeof(chunk_type));
 
-    // Jumps the chunk data
-    file.seekg(chunk_sz, std::ios_base::cur);
-    if(!file.good()) {
-        cerr << "[Error]: Jumping chunk failed.\n";
+        // If type is IEND
+        if(*(uint32_t*)chunk_type == 1145980233) quit = true;
+
+        // Jumps the chunk data
+        file.seekg(chunk_sz, std::ios_base::cur);
+        if(!file.good()) {
+            cerr << "[Error]: Jumping chunk failed.\n";
+        }
+
+        // Reads the chunk crc
+        uint32_t chunk_crc;
+        read_bytes(file, &chunk_crc, sizeof(chunk_crc));
+
+        cout << "[Info]: Chunk Size: " << chunk_sz << "\n";
+        cout << "[Info]: Chunk Type: " << chunk_type[0] << chunk_type[1] << chunk_type[2] << chunk_type[3] << " (" << *(uint32_t*)chunk_type << ")\n";
+        cout << "[Info]: Chunk CRC: " << chunk_crc << "\n";
+        cout << "--------------------------------------\n";
     }
 
-    // Reads the chunk crc
-    uint32_t chunk_crc;
-    read_bytes(file, &chunk_crc, sizeof(chunk_crc));
-    cout << "[Info]: Chunk CRC: " << chunk_crc << "\n";
-
-
-
-    
     file.close();
     return 0;
 }
